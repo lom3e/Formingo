@@ -33,8 +33,9 @@ Send a POST request to `/contact` with JSON body containing form fields like:
   "message": "Hello, I would like to get in touch.",
   "privacyAccepted": true
 }
+```
 
-License
+## License
 This project is licensed under the MIT License. See the LICENSE file for details.
 
 Made with ❤️ by Matteo
