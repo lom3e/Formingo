@@ -4,8 +4,13 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const axios = require('axios');
 const nodemailer = require('nodemailer');
+const cors = require('cors');
 
 app.use(express.json());
+
+app.use(cors({
+  origin: 'http://localhost:4000' // oppure '*' per qualsiasi origine (meno sicuro)
+}));
 
 // Rotta test
 app.get('/', (req, res) => {
@@ -67,6 +72,23 @@ app.post('/contact', async (req, res) => {
     const adminEmail = process.env.ADMIN_EMAIL;
     const adminSubject = `Nuovo messaggio da ${name}`;
     const adminText = `Hai ricevuto un nuovo messaggio:\n\nNome: ${name}\nEmail: ${email}\nMessaggio:\n${message}`;
+    const adminHtml = `
+        <div style="font-family: Arial, sans-serif; padding: 20px; background-color: #f4f4f4;">
+            <div style="max-width: 600px; margin: auto; background-color: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.05);">
+            <h2 style="color: #d6336c;">📥 Nuovo messaggio dal form</h2>
+            <p><strong>Nome:</strong> ${name}</p>
+            <p><strong>Email:</strong> <a href="mailto:${email}">${email}</a></p>
+            <p><strong>Data:</strong> ${new Date().toLocaleString('it-IT')}</p>
+            <p><strong>Messaggio:</strong></p>
+            <blockquote style="background: #f8f9fa; padding: 15px; border-left: 5px solid #0d6efd;">
+                ${message.replace(/\n/g, '<br>')}
+            </blockquote>
+            <hr style="margin: 30px 0;">
+            <p style="font-size: 14px; color: #6c757d;">Questa è una copia automatica della richiesta ricevuta tramite Formingo.</p>
+            </div>
+        </div>
+        `;
+
 
     // Email conferma utente
     const userSubject = 'Conferma ricezione messaggio';
@@ -87,7 +109,7 @@ app.post('/contact', async (req, res) => {
         </div>
         `;
     // Email all’amministratore
-    sendEmail(adminEmail, adminSubject, adminText);
+    sendEmail(adminEmail, adminSubject, adminText, false, adminHtml);
 
     // Email all’utente, con copia nascosta a te
     sendEmail(email, userSubject, userText, true, userHtml);
