@@ -56,7 +56,8 @@ app.post('/contact', async (req, res) => {
             const data = response.data;
             if (!data.success) {
                 return res.status(403).json({ error: 'Failed reCAPTCHA verification.' });
-            }
+            } else 
+            console.log("Verifica captcha superata con successo.");
         } catch (err) {
             console.error('Errore verifica reCAPTCHA:', err);
             return res.status(500).json({ error: 'Errore interno nel server.' });
