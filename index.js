@@ -5,73 +5,74 @@ const PORT = process.env.PORT || 3000;
 const axios = require('axios');
 const nodemailer = require('nodemailer');
 const cors = require('cors');
+const authenticateApiKey = require('./middlewares/authenticateApiKey');
 
 app.use(express.json());
 
 app.use(cors({
-  origin: 'http://localhost:4000' // oppure '*' per qualsiasi origine (meno sicuro)
+    origin: 'http://localhost:5173' // oppure '*' per qualsiasi origine (meno sicuro)
 }));
 
 // Rotta test
 app.get('/', (req, res) => {
-  res.send('Formingo API is running');
+    res.send('Formingo API is running');
 });
 
 app.get('/hello', (req, res) => {
-  res.send('Hello, this is Formingo!');
+    res.send('Hello, this is Formingo!');
 });
 
 // POST /contact
-app.post('/contact', async (req, res) => {
-  const { name, email, message, privacyAccepted, token, config = {} } = req.body;
+app.post('/contact', authenticateApiKey, async (req, res) => {
+    const { name, email, message, privacyAccepted, token } = req.body;
 
-  if (!name || !email || !message) {
-    return res.status(400).json({ error: 'Missing required fields.' });
-  }
-
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(email)) {
-    return res.status(400).json({ error: 'Invalid email format.' });
-  }
-
-  if (privacyAccepted !== true) {
-    return res.status(400).json({ error: 'Privacy Policy must be accepted.' });
-  }
-
-  // Leggi le credenziali dinamiche o fallback a quelle del .env
-  const recaptchaSecret = config.recaptchaSecret || process.env.RECAPTCHA_SECRET;
-  const adminEmail = config.adminEmail || process.env.ADMIN_EMAIL;
-  const gmailUser = config.gmailUser || process.env.GMAIL_USER;
-  const gmailPass = config.gmailPass || process.env.GMAIL_APP_PASS;
-
-  // Verifica reCAPTCHA se non disabilitato
-  const isRecaptchaDisabled = process.env.DISABLE_RECAPTCHA === 'true';
-  if (!isRecaptchaDisabled) {
-    if (!token) {
-      return res.status(400).json({ error: 'reCAPTCHA token missing.' });
+    if (!name || !email || !message) {
+        return res.status(400).json({ error: 'Missing required fields.' });
     }
 
-    try {
-      const verifyURL = `https://www.google.com/recaptcha/api/siteverify?secret=${recaptchaSecret}&response=${token}`;
-      const response = await axios.post(verifyURL);
-      const data = response.data;
-      if (!data.success) {
-        return res.status(403).json({ error: 'Failed reCAPTCHA verification.' });
-      } else {
-        console.log("✅ Verifica captcha superata.");
-      }
-    } catch (err) {
-      console.error('❌ Errore verifica reCAPTCHA:', err);
-      return res.status(500).json({ error: 'Errore interno nel server.' });
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+        return res.status(400).json({ error: 'Invalid email format.' });
     }
-  } else {
-    console.log('⚠️ Verifica reCAPTCHA disabilitata (modalità sviluppo)');
-  }
 
-  // EMAIL: contenuto
-  const adminSubject = `Nuovo messaggio da ${name}`;
-  const adminText = `Hai ricevuto un nuovo messaggio:\n\nNome: ${name}\nEmail: ${email}\nMessaggio:\n${message}`;
-  const adminHtml = `
+    if (privacyAccepted !== true) {
+        return res.status(400).json({ error: 'Privacy Policy must be accepted.' });
+    }
+
+    // Leggi le credenziali dal client autenticato oppure da .env
+    const recaptchaSecret = req.client?.recaptchaSecret || process.env.RECAPTCHA_SECRET;
+    const adminEmail = req.client?.email || process.env.ADMIN_EMAIL;  // mittente da JSON
+    const gmailUser = req.client?.email || process.env.GMAIL_USER;    // user gmail è email cliente
+    const gmailPass = req.client?.gmailPass || process.env.GMAIL_APP_PASS;
+
+    // Verifica reCAPTCHA se non disabilitato
+    const isRecaptchaDisabled = process.env.DISABLE_RECAPTCHA === 'true';
+    if (!isRecaptchaDisabled) {
+        if (!token) {
+            return res.status(400).json({ error: 'reCAPTCHA token missing.' });
+        }
+
+        try {
+            const verifyURL = `https://www.google.com/recaptcha/api/siteverify?secret=${recaptchaSecret}&response=${token}`;
+            const response = await axios.post(verifyURL);
+            const data = response.data;
+            if (!data.success) {
+                return res.status(403).json({ error: 'Failed reCAPTCHA verification.' });
+            } else {
+                console.log("✅ Verifica captcha superata.");
+            }
+        } catch (err) {
+            console.error('❌ Errore verifica reCAPTCHA:', err);
+            return res.status(500).json({ error: 'Errore interno nel server.' });
+        }
+    } else {
+        console.log('⚠️ Verifica reCAPTCHA disabilitata (modalità sviluppo)');
+    }
+
+    // EMAIL: contenuto
+    const adminSubject = `Nuovo messaggio da ${name}`;
+    const adminText = `Hai ricevuto un nuovo messaggio:\n\nNome: ${name}\nEmail: ${email}\nMessaggio:\n${message}`;
+    const adminHtml = `
     <div style="font-family: Arial, sans-serif; padding: 20px; background-color: #f4f4f4;">
       <div style="max-width: 600px; margin: auto; background-color: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.05);">
         <h2 style="color: #d6336c;">📥 Nuovo messaggio dal form</h2>
@@ -88,9 +89,9 @@ app.post('/contact', async (req, res) => {
     </div>
   `;
 
-  const userSubject = 'Conferma ricezione messaggio';
-  const userText = `Ciao ${name},\n\nGrazie per averci scritto!...`;
-  const userHtml = `
+    const userSubject = 'Conferma ricezione messaggio';
+    const userText = `Ciao ${name},\n\nGrazie per averci scritto!...`;
+    const userHtml = `
     <div style="font-family: Arial, sans-serif; padding: 20px; background-color: #f8f9fa;">
       <div style="max-width: 600px; margin: auto; background-color: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.05);">
         <h2 style="color: #2c3e50;">Ciao ${name},</h2>
@@ -106,39 +107,40 @@ app.post('/contact', async (req, res) => {
     </div>
   `;
 
-  try {
-    await sendEmail(adminEmail, adminSubject, adminText, false, adminHtml, gmailUser, gmailPass);
-    await sendEmail(email, userSubject, userText, true, userHtml, gmailUser, gmailPass);
-    res.json({ message: "Form inviato correttamente!" });
-    console.log('✅ Email inviate con successo.');
-  } catch (err) {
-    console.error('❌ Errore invio email:', err);
-    res.status(500).json({ error: 'Errore nell\'invio delle email.' });
-  }
+    try {
+        await sendEmail(adminEmail, adminSubject, adminText, false, adminHtml, gmailUser, gmailPass);
+        await sendEmail(email, userSubject, userText, true, userHtml, gmailUser, gmailPass);
+        res.json({ message: "Form inviato correttamente!" });
+        console.log('✅ Email inviate con successo.');
+    } catch (err) {
+        console.error('❌ Errore invio email:', err);
+        res.status(500).json({ error: 'Errore nell\'invio delle email.' });
+    }
 });
 
+
 async function sendEmail(to, subject, text, sendBcc = false, html = null, gmailUser, gmailPass) {
-  const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: gmailUser,
-      pass: gmailPass
-    }
-  });
+    const transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+            user: gmailUser,
+            pass: gmailPass
+        }
+    });
 
-  const mailOptions = {
-    from: `"Formingo" <${gmailUser}>`,
-    to,
-    subject,
-    text,
-    ...(sendBcc && { bcc: gmailUser }),
-    ...(html && { html })
-  };
+    const mailOptions = {
+        from: `"Formingo" <${gmailUser}>`,
+        to,
+        subject,
+        text,
+        ...(sendBcc && { bcc: gmailUser }),
+        ...(html && { html })
+    };
 
-  return transporter.sendMail(mailOptions);
+    return transporter.sendMail(mailOptions);
 }
 
 // Avvio server
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+    console.log(`Server running on port ${PORT}`);
 });
